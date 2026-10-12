@@ -1,0 +1,31 @@
+# Python and Django
+__pycache__/
+*.py[cod]
+*.sqlite3
+backend/.env
+backend/.venv/
+backend/media/
+backend/staticfiles/
+.pytest_cache/
+.coverage
+
+# Flutter / Dart
+frontend/.dart_tool/
+frontend/.packages
+frontend/build/
+frontend/.firebase/
+frontend/.pub-cache/
+frontend/.tmp/
+frontend/.platform_template/
+frontend/.flutter-plugins
+frontend/.flutter-plugins-dependencies
+frontend/android/local.properties
+frontend/android/key.properties
+frontend/ios/Flutter/Generated.xcconfig
+
+# Editors and OS
+.idea/
+.vscode/
+*.iml
+Thumbs.db
+.DS_Store
