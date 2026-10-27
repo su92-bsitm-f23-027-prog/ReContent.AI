@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -44,42 +45,42 @@ class ApiClient {
   }
 
   Map<String, String> _headers({bool json = true}) => {
-    if (json) 'Content-Type': 'application/json',
-    'Accept': 'application/json',
-    if (hasToken) 'Authorization': 'Bearer $_token',
-  };
+        if (json) 'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        if (hasToken) 'Authorization': 'Bearer $_token',
+      };
 
   Future<dynamic> get(String path) async {
-    final response = await _client.get(
-      _uri(path),
-      headers: _headers(json: false),
-    );
+    final response = await _send(() => _client.get(
+          _uri(path),
+          headers: _headers(json: false),
+        ));
     return _decode(response);
   }
 
   Future<dynamic> post(String path, [Map<String, dynamic>? body]) async {
-    final response = await _client.post(
-      _uri(path),
-      headers: _headers(),
-      body: jsonEncode(body ?? const <String, dynamic>{}),
-    );
+    final response = await _send(() => _client.post(
+          _uri(path),
+          headers: _headers(),
+          body: jsonEncode(body ?? const <String, dynamic>{}),
+        ));
     return _decode(response);
   }
 
   Future<dynamic> patch(String path, Map<String, dynamic> body) async {
-    final response = await _client.patch(
-      _uri(path),
-      headers: _headers(),
-      body: jsonEncode(body),
-    );
+    final response = await _send(() => _client.patch(
+          _uri(path),
+          headers: _headers(),
+          body: jsonEncode(body),
+        ));
     return _decode(response);
   }
 
   Future<dynamic> delete(String path) async {
-    final response = await _client.delete(
-      _uri(path),
-      headers: _headers(json: false),
-    );
+    final response = await _send(() => _client.delete(
+          _uri(path),
+          headers: _headers(json: false),
+        ));
     return _decode(response);
   }
 
@@ -98,12 +99,33 @@ class ApiClient {
       ..files.add(
         http.MultipartFile.fromBytes('file', bytes, filename: fileName),
       );
-    final response = await http.Response.fromStream(await request.send());
+    final response = await _send(
+      () async => http.Response.fromStream(await request.send()),
+    );
     return _decode(response);
   }
 
   Uri _uri(String path) =>
       Uri.parse('$baseUrl/${path.replaceFirst(RegExp(r'^/'), '')}');
+
+  Future<http.Response> _send(Future<http.Response> Function() request) async {
+    try {
+      return await request().timeout(const Duration(seconds: 120));
+    } on TimeoutException {
+      throw const ApiException(
+        'The server took too long to respond. Please try again.',
+      );
+    } on http.ClientException {
+      throw const ApiException(
+        'Could not reach the server. Check that the API is running and try again.',
+      );
+    } catch (error) {
+      if (error is ApiException) rethrow;
+      throw const ApiException(
+        'Could not reach the server. Check that the API is running and try again.',
+      );
+    }
+  }
 
   dynamic _decode(http.Response response) {
     if (response.statusCode == 204 || response.body.isEmpty) return null;

@@ -2,7 +2,7 @@
 
 ReContent AI is a Final Year Project that turns a video, audio recording, or text source into editable social content for Instagram, Facebook, and LinkedIn. It includes account registration, source analysis, a transcript editor, a content library, generation history, and a calendar for managing planned post times.
 
-The calendar stores and manages a schedule only. It does not publish posts to social platforms.
+The calendar stores planned times as reminders. The Instagram content editor now includes photo upload and an official Meta publishing flow with a **Publish now** confirmation. Instagram publishing still needs a Meta developer app, a connected Creator/Business account, and a deployed HTTPS backend; Facebook and LinkedIn remain manual share flows.
 
 ## Project layout
 
@@ -80,6 +80,10 @@ Run Flutter tests from `frontend/`:
 flutter test
 ```
 
+## Instagram publishing
+
+Follow [docs/INSTAGRAM_PUBLISHING.md](docs/INSTAGRAM_PUBLISHING.md) to configure the Meta app, backend environment, HTTPS callback, and public image endpoint before using **Publish now**.
+
 ## Main API routes
 
 | Area | Routes |
@@ -90,5 +94,6 @@ flutter test
 | Library | `GET/POST /api/content/`, `GET/PATCH/DELETE /api/content/{id}/`, `POST /api/content/{id}/regenerate/`, `POST /api/content/{id}/restore_draft/` |
 | Scheduling | `GET /api/calendar/`, `GET/POST /api/schedules/`, `PATCH /api/schedules/{id}/`, `POST /api/schedules/{id}/cancel/` |
 | Dashboard | `GET /api/dashboard/` |
+| Instagram | `GET /api/integrations/instagram/status/`, `POST /api/integrations/instagram/connect/`, `DELETE /api/integrations/instagram/disconnect/` |
 
 All private API routes require `Authorization: Bearer <token>`. Tokens expire after 14 days, and each sign-in rotates the account's active token. Production deployments must use HTTPS, a strong secret key, explicit allowed hosts and CORS origins, and a protected database.

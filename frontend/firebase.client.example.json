@@ -1,0 +1,7 @@
+{
+  "FIREBASE_API_KEY": "copy-from-your-firebase-web-app-config",
+  "FIREBASE_APP_ID": "copy-from-your-firebase-web-app-config",
+  "FIREBASE_MESSAGING_SENDER_ID": "copy-from-your-firebase-web-app-config",
+  "FIREBASE_PROJECT_ID": "your-firebase-project-id",
+  "FIREBASE_AUTH_DOMAIN": "your-firebase-project-id.firebaseapp.com"
+}

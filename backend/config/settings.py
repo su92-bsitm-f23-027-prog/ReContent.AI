@@ -31,6 +31,7 @@ INSTALLED_APPS = [
     "apps.sources",
     "apps.generation",
     "apps.scheduling",
+    "apps.integrations",
 ]
 
 MIDDLEWARE = [
@@ -105,6 +106,11 @@ AI_MODE = os.getenv("AI_MODE", "demo").lower()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "")
 TRANSCRIPTION_MODEL = os.getenv("TRANSCRIPTION_MODEL", "gpt-4o-mini-transcribe")
+INSTAGRAM_APP_ID = os.getenv("INSTAGRAM_APP_ID", "")
+INSTAGRAM_APP_SECRET = os.getenv("INSTAGRAM_APP_SECRET", "")
+INSTAGRAM_REDIRECT_URI = os.getenv("INSTAGRAM_REDIRECT_URI", "")
+INSTAGRAM_GRAPH_VERSION = os.getenv("INSTAGRAM_GRAPH_VERSION", "v25.0")
+PUBLIC_API_ORIGIN = os.getenv("PUBLIC_API_ORIGIN", "").rstrip("/")
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": ["apps.accounts.authentication.ExpiringTokenAuthentication"],

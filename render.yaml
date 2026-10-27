@@ -34,3 +34,17 @@ services:
         value: demo
       - key: MAX_UPLOAD_MB
         value: "20"
+      - key: FIREBASE_PROJECT_ID
+        value: ""
+      - key: FIREBASE_SERVICE_ACCOUNT_JSON
+        value: ""
+      - key: INSTAGRAM_APP_ID
+        sync: false
+      - key: INSTAGRAM_APP_SECRET
+        sync: false
+      - key: INSTAGRAM_REDIRECT_URI
+        sync: false
+      - key: INSTAGRAM_GRAPH_VERSION
+        value: v25.0
+      - key: PUBLIC_API_ORIGIN
+        sync: false

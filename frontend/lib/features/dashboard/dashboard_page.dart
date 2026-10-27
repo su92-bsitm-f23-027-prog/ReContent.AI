@@ -6,6 +6,7 @@ import '../../core/api_client.dart';
 import '../../core/app_theme.dart';
 import '../../core/auth_controller.dart';
 import '../../core/widgets.dart';
+import '../content/content_editor_page.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({
@@ -30,8 +31,28 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Future<Map<String, dynamic>> _load() async => Map<String, dynamic>.from(
-    await context.read<AuthController>().api.get('dashboard/'),
-  );
+        await context.read<AuthController>().api.get('dashboard/'),
+      );
+
+  Future<void> _openContent(dynamic contentId) async {
+    if (contentId == null) return;
+    try {
+      final item = Map<String, dynamic>.from(
+        await context.read<AuthController>().api.get('content/$contentId/'),
+      );
+      if (!mounted) return;
+      await Navigator.of(
+        context,
+      ).push(MaterialPageRoute(builder: (_) => ContentEditorPage(item: item)));
+      if (mounted) setState(() => _dashboard = _load());
+    } on ApiException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -39,8 +60,9 @@ class _DashboardPageState extends State<DashboardPage> {
     return FutureBuilder<Map<String, dynamic>>(
       future: _dashboard,
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting)
+        if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
+        }
         if (snapshot.hasError) {
           return ListView(
             padding: const EdgeInsets.all(28),
@@ -101,11 +123,13 @@ class _DashboardPageState extends State<DashboardPage> {
                     items: _asList(data['recent_content']),
                     onSeeAll: widget.onOpenLibrary,
                     onCreate: widget.onCreate,
+                    onOpenContent: _openContent,
                   ),
                   const SizedBox(height: 18),
                   _UpcomingCard(
                     items: _asList(data['upcoming']),
                     onCreate: widget.onCreate,
+                    onOpenContent: _openContent,
                   ),
                 ] else
                   Row(
@@ -117,6 +141,7 @@ class _DashboardPageState extends State<DashboardPage> {
                           items: _asList(data['recent_content']),
                           onSeeAll: widget.onOpenLibrary,
                           onCreate: widget.onCreate,
+                          onOpenContent: _openContent,
                         ),
                       ),
                       const SizedBox(width: 18),
@@ -125,6 +150,7 @@ class _DashboardPageState extends State<DashboardPage> {
                         child: _UpcomingCard(
                           items: _asList(data['upcoming']),
                           onCreate: widget.onCreate,
+                          onOpenContent: _openContent,
                         ),
                       ),
                     ],
@@ -148,9 +174,9 @@ class _DashboardPageState extends State<DashboardPage> {
 
   List<Map<String, dynamic>> _asList(dynamic value) => value is List
       ? value
-            .whereType<Map>()
-            .map((item) => Map<String, dynamic>.from(item))
-            .toList()
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList()
       : const [];
 }
 
@@ -225,10 +251,13 @@ class _Metrics extends StatelessWidget {
                       ),
                     ),
                     const Spacer(),
-                    const Icon(
-                      Icons.more_horiz_rounded,
-                      color: AppColors.muted,
-                      size: 18,
+                    Tooltip(
+                      message: 'Your ${cards[index].label.toLowerCase()}',
+                      child: const Icon(
+                        Icons.info_outline_rounded,
+                        color: AppColors.muted,
+                        size: 17,
+                      ),
                     ),
                   ],
                 ),
@@ -266,48 +295,53 @@ class _RecentCard extends StatelessWidget {
     required this.items,
     required this.onSeeAll,
     required this.onCreate,
+    required this.onOpenContent,
   });
   final List<Map<String, dynamic>> items;
   final VoidCallback onSeeAll;
   final VoidCallback onCreate;
+  final ValueChanged<dynamic> onOpenContent;
 
   @override
   Widget build(BuildContext context) => SurfaceCard(
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: Text(
-                'Recent content',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Recent content',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+                TextButton(
+                    onPressed: onSeeAll, child: const Text('View library')),
+              ],
             ),
-            TextButton(onPressed: onSeeAll, child: const Text('View library')),
+            const SizedBox(height: 8),
+            if (items.isEmpty)
+              EmptyState(
+                title: 'Your library starts here',
+                description:
+                    'Create a source and turn it into platform-ready posts.',
+                action: PrimaryAction(
+                  label: 'Create your first content',
+                  onPressed: onCreate,
+                ),
+              )
+            else
+              for (final item in items.take(5))
+                _RecentRow(item: item, onTap: () => onOpenContent(item['id'])),
           ],
         ),
-        const SizedBox(height: 8),
-        if (items.isEmpty)
-          EmptyState(
-            title: 'Your library starts here',
-            description:
-                'Create a source and turn it into platform-ready posts.',
-            action: PrimaryAction(
-              label: 'Create your first content',
-              onPressed: onCreate,
-            ),
-          )
-        else
-          for (final item in items.take(5)) _RecentRow(item: item),
-      ],
-    ),
-  );
+      );
 }
 
 class _RecentRow extends StatelessWidget {
-  const _RecentRow({required this.item});
+  const _RecentRow({required this.item, required this.onTap});
   final Map<String, dynamic> item;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -318,77 +352,98 @@ class _RecentRow extends StatelessWidget {
       'facebook' => Icons.groups_outlined,
       _ => Icons.work_outline_rounded,
     };
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 11),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 37,
-            height: 37,
-            decoration: BoxDecoration(
-              color: AppColors.violetSoft,
-              borderRadius: BorderRadius.circular(11),
-            ),
-            child: Icon(platformIcon, size: 18, color: AppColors.violet),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${titleCase(item['content_type'] as String? ?? 'caption')} · ${titleCase(platform)}',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.ink,
-                    fontSize: 13,
-                  ),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 6),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 37,
+                height: 37,
+                decoration: BoxDecoration(
+                  color: AppColors.violetSoft,
+                  borderRadius: BorderRadius.circular(11),
                 ),
-                const SizedBox(height: 3),
-                Text(
-                  body.isEmpty ? 'No text yet' : body,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+                child: Icon(platformIcon, size: 18, color: AppColors.violet),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${titleCase(item['content_type'] as String? ?? 'caption')} · ${titleCase(platform)}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.ink,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      body.isEmpty ? 'No text yet' : body,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 8),
+              StatusPill(status: item['status'] as String? ?? 'draft'),
+            ],
           ),
-          const SizedBox(width: 8),
-          StatusPill(status: item['status'] as String? ?? 'draft'),
-        ],
+        ),
       ),
     );
   }
 }
 
 class _UpcomingCard extends StatelessWidget {
-  const _UpcomingCard({required this.items, required this.onCreate});
+  const _UpcomingCard({
+    required this.items,
+    required this.onCreate,
+    required this.onOpenContent,
+  });
   final List<Map<String, dynamic>> items;
   final VoidCallback onCreate;
+  final ValueChanged<dynamic> onOpenContent;
 
   @override
   Widget build(BuildContext context) => SurfaceCard(
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Coming up', style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: 15),
-        if (items.isEmpty)
-          const EmptyState(
-            title: 'Nothing scheduled yet',
-            description: 'When you schedule a post, it will show up here.',
-          )
-        else
-          for (final item in items) _UpcomingRow(item: item),
-      ],
-    ),
-  );
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Coming up', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 15),
+            if (items.isEmpty)
+              EmptyState(
+                title: 'Nothing scheduled yet',
+                description: 'When you schedule a post, it will show up here.',
+                action: PrimaryAction(
+                  label: 'Create content',
+                  onPressed: onCreate,
+                ),
+              )
+            else
+              for (final item in items)
+                _UpcomingRow(
+                  item: item,
+                  onTap: () => onOpenContent(item['content']),
+                ),
+          ],
+        ),
+      );
 }
 
 class _UpcomingRow extends StatelessWidget {
-  const _UpcomingRow({required this.item});
+  const _UpcomingRow({required this.item, required this.onTap});
   final Map<String, dynamic> item;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -396,75 +451,81 @@ class _UpcomingRow extends StatelessWidget {
     try {
       time = DateTime.parse(item['scheduled_for'] as String).toLocal();
     } catch (_) {}
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Material(
         color: AppColors.canvas,
         borderRadius: BorderRadius.circular(13),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 45,
-            height: 48,
-            decoration: BoxDecoration(
-              color: AppColors.white,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(13),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
               children: [
-                Text(
-                  time == null ? '--' : DateFormat('d').format(time),
-                  style: const TextStyle(
-                    color: AppColors.violet,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 17,
+                Container(
+                  width: 45,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: AppColors.white,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        time == null ? '--' : DateFormat('d').format(time),
+                        style: const TextStyle(
+                          color: AppColors.violet,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 17,
+                        ),
+                      ),
+                      Text(
+                        time == null
+                            ? '---'
+                            : DateFormat('MMM').format(time).toUpperCase(),
+                        style: const TextStyle(
+                          color: AppColors.muted,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                Text(
-                  time == null
-                      ? '---'
-                      : DateFormat('MMM').format(time).toUpperCase(),
-                  style: const TextStyle(
-                    color: AppColors.muted,
-                    fontSize: 9,
-                    fontWeight: FontWeight.w700,
+                const SizedBox(width: 11),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${titleCase(item['platform'] as String? ?? '')} · ${titleCase(item['content_type'] as String? ?? 'post')}',
+                        style: const TextStyle(
+                          color: AppColors.ink,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 12,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        time == null
+                            ? 'Time unavailable'
+                            : DateFormat('EEE · h:mm a').format(time),
+                        style: const TextStyle(fontSize: 11),
+                      ),
+                    ],
                   ),
+                ),
+                const Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  color: AppColors.muted,
+                  size: 13,
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 11),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${titleCase(item['platform'] as String? ?? '')} · ${titleCase(item['content_type'] as String? ?? 'post')}',
-                  style: const TextStyle(
-                    color: AppColors.ink,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 12,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  time == null
-                      ? 'Time unavailable'
-                      : DateFormat('EEE · h:mm a').format(time),
-                  style: const TextStyle(fontSize: 11),
-                ),
-              ],
-            ),
-          ),
-          const Icon(
-            Icons.arrow_forward_ios_rounded,
-            color: AppColors.muted,
-            size: 13,
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -473,47 +534,47 @@ class _UpcomingRow extends StatelessWidget {
 class _WorkflowTip extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(18),
-    decoration: BoxDecoration(
-      color: const Color(0xFFEDEAFF),
-      borderRadius: BorderRadius.circular(16),
-    ),
-    child: Row(
-      children: [
-        Container(
-          width: 42,
-          height: 42,
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(.7),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: const Icon(
-            Icons.lightbulb_outline_rounded,
-            color: AppColors.violet,
-          ),
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: const Color(0xFFEDEAFF),
+          borderRadius: BorderRadius.circular(16),
         ),
-        const SizedBox(width: 14),
-        const Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'A good source can become a week of ideas.',
-                style: TextStyle(
-                  color: AppColors.ink,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13,
-                ),
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: .7),
+                borderRadius: BorderRadius.circular(12),
               ),
-              SizedBox(height: 4),
-              Text(
-                'Start with a transcript, a note, or a recording. ReContent helps shape each version for its platform.',
-                style: TextStyle(color: AppColors.muted, fontSize: 12),
+              child: const Icon(
+                Icons.lightbulb_outline_rounded,
+                color: AppColors.violet,
               ),
-            ],
-          ),
+            ),
+            const SizedBox(width: 14),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'A good source can become a week of ideas.',
+                    style: TextStyle(
+                      color: AppColors.ink,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    'Start with a transcript, a note, or a recording. ReContent helps shape each version for its platform.',
+                    style: TextStyle(color: AppColors.muted, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
-      ],
-    ),
-  );
+      );
 }

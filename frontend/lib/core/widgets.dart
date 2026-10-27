@@ -169,6 +169,7 @@ class StatusPill extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = switch (status) {
       'scheduled' => AppColors.mint,
+      'published' => AppColors.mint,
       'cancelled' => const Color(0xFFB76A3E),
       _ => AppColors.violet,
     };

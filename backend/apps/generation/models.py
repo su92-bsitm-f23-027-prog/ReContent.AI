@@ -20,12 +20,16 @@ class ContentItem(models.Model):
         DRAFT = "draft", "Draft"
         SCHEDULED = "scheduled", "Scheduled"
         CANCELLED = "cancelled", "Cancelled"
+        PUBLISHED = "published", "Published"
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="content_items")
     source = models.ForeignKey("sources.Source", on_delete=models.SET_NULL, null=True, blank=True, related_name="content_items")
     platform = models.CharField(max_length=20, choices=Platform.choices)
     content_type = models.CharField(max_length=20, choices=ContentType.choices)
     body = models.TextField()
+    image = models.ImageField(upload_to="social-images/%Y/%m/", blank=True)
+    instagram_media_id = models.CharField(max_length=80, blank=True)
+    published_at = models.DateTimeField(null=True, blank=True)
     generation_mode = models.CharField(max_length=10, default="demo")
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.DRAFT)
     created_at = models.DateTimeField(auto_now_add=True)

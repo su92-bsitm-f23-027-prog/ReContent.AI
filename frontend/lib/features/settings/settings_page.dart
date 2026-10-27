@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/api_client.dart';
-import '../../core/app_theme.dart';
 import '../../core/auth_controller.dart';
 import '../../core/widgets.dart';
 
@@ -38,22 +37,24 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _save() async {
+    final auth = context.read<AuthController>();
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
-      await context.read<AuthController>().api.patch('auth/me/', {
+      await auth.api.patch('auth/me/', {
         'first_name': _firstName.text.trim(),
         'last_name': _lastName.text.trim(),
       });
-      await context.read<AuthController>().refreshProfile();
-      if (mounted)
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Profile saved.')));
+      if (!mounted) return;
+      await auth.refreshProfile();
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Profile saved.')));
     } on ApiException catch (error) {
-      setState(() => _error = error.message);
+      if (mounted) setState(() => _error = error.message);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -81,28 +82,39 @@ class _SettingsPageState extends State<SettingsPage> {
                 const SizedBox(height: 5),
                 const Text('Your profile details are private to your account.'),
                 const SizedBox(height: 18),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _firstName,
-                        textCapitalization: TextCapitalization.words,
-                        decoration: const InputDecoration(
-                          labelText: 'First name',
-                        ),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final firstName = TextField(
+                      controller: _firstName,
+                      textCapitalization: TextCapitalization.words,
+                      decoration: const InputDecoration(
+                        labelText: 'First name',
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: TextField(
-                        controller: _lastName,
-                        textCapitalization: TextCapitalization.words,
-                        decoration: const InputDecoration(
-                          labelText: 'Last name',
-                        ),
+                    );
+                    final lastName = TextField(
+                      controller: _lastName,
+                      textCapitalization: TextCapitalization.words,
+                      decoration: const InputDecoration(
+                        labelText: 'Last name',
                       ),
-                    ),
-                  ],
+                    );
+                    if (constraints.maxWidth < 430) {
+                      return Column(
+                        children: [
+                          firstName,
+                          const SizedBox(height: 12),
+                          lastName,
+                        ],
+                      );
+                    }
+                    return Row(
+                      children: [
+                        Expanded(child: firstName),
+                        const SizedBox(width: 12),
+                        Expanded(child: lastName),
+                      ],
+                    );
+                  },
                 ),
                 const SizedBox(height: 14),
                 TextFormField(

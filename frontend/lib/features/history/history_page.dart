@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/api_client.dart';
 import '../../core/app_theme.dart';
 import '../../core/auth_controller.dart';
 import '../../core/widgets.dart';
@@ -48,23 +47,26 @@ class _HistoryPageState extends State<HistoryPage> {
         child: FutureBuilder<List<Map<String, dynamic>>>(
           future: _events,
           builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting)
+            if (snapshot.connectionState == ConnectionState.waiting) {
               return const Padding(
                 padding: EdgeInsets.all(36),
                 child: Center(child: CircularProgressIndicator()),
               );
-            if (snapshot.hasError)
+            }
+            if (snapshot.hasError) {
               return InlineError(
                 message: snapshot.error.toString(),
                 onRetry: () => setState(() => _events = _load()),
               );
+            }
             final events = snapshot.data ?? const [];
-            if (events.isEmpty)
+            if (events.isEmpty) {
               return const EmptyState(
                 title: 'History will appear here',
                 description:
                     'Once you process a source or generate content, you can review those steps here.',
               );
+            }
             return Column(
               children: [for (final event in events) _HistoryRow(event: event)],
             );
@@ -83,12 +85,15 @@ class _HistoryRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final action = event['event_type'] as String? ?? 'updated';
     final details = <String>[];
-    if ((event['content_type'] as String? ?? '').isNotEmpty)
+    if ((event['content_type'] as String? ?? '').isNotEmpty) {
       details.add(titleCase(event['content_type'] as String));
-    if ((event['platform'] as String? ?? '').isNotEmpty)
+    }
+    if ((event['platform'] as String? ?? '').isNotEmpty) {
       details.add(titleCase(event['platform'] as String));
-    if ((event['source_title'] as String? ?? '').isNotEmpty)
+    }
+    if ((event['source_title'] as String? ?? '').isNotEmpty) {
       details.add(event['source_title'] as String);
+    }
     DateTime? when;
     try {
       when = DateTime.parse(event['created_at'] as String).toLocal();

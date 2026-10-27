@@ -1,3 +1,6 @@
+from django.conf import settings
+from django.core import signing
+from django.urls import reverse
 from rest_framework import serializers
 
 from .models import ContentItem, GenerationEvent
@@ -9,10 +12,11 @@ class ContentSerializer(serializers.ModelSerializer):
     content_type_label = serializers.CharField(source="get_content_type_display", read_only=True)
     schedule_id = serializers.SerializerMethodField()
     scheduled_for = serializers.SerializerMethodField()
+    image_url = serializers.SerializerMethodField()
 
     class Meta:
         model = ContentItem
-        fields = ("id", "source", "source_title", "platform", "platform_label", "content_type", "content_type_label", "body", "generation_mode", "status", "schedule_id", "scheduled_for", "created_at", "updated_at")
+        fields = ("id", "source", "source_title", "platform", "platform_label", "content_type", "content_type_label", "body", "image_url", "generation_mode", "status", "schedule_id", "scheduled_for", "published_at", "created_at", "updated_at")
         read_only_fields = ("id", "source", "status", "created_at", "updated_at")
 
     def get_schedule_id(self, obj):
@@ -26,6 +30,17 @@ class ContentSerializer(serializers.ModelSerializer):
             return obj.schedule.scheduled_for
         except Exception:
             return None
+
+    def get_image_url(self, obj):
+        if not obj.image:
+            return ""
+        request = self.context.get("request")
+        token = signing.dumps({"content_id": obj.pk}, salt="instagram-publish-image")
+        path = reverse("instagram-public-image", kwargs={"token": token})
+        origin = settings.PUBLIC_API_ORIGIN.rstrip("/")
+        if not origin and request:
+            origin = request.build_absolute_uri("/").rstrip("/")
+        return f"{origin}{path}" if origin else path
 
 
 

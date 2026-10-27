@@ -23,7 +23,7 @@ The client is an app-style Flutter interface with responsive navigation. The API
 5. The user selects Instagram, Facebook, or LinkedIn and one or more output types. Each result is a separate editable content item with its source and generation mode recorded.
 6. The user can edit, regenerate, copy, download, schedule, reschedule, cancel, restore a cancelled draft, or delete a content item.
 
-The calendar is a planning record. There are no social account connections or automatic publishing calls.
+The calendar is a planning record; its times do not trigger publishing. The editor's manual share action copies the current text and opens the selected social network for the user to review and publish. There are no social account connections or automatic publishing calls.
 
 ## Data relationships
 
@@ -52,4 +52,4 @@ All API viewsets filter by the authenticated user before reading or mutating pri
 - Video processing depends on FFmpeg installed on the backend host.
 - Uploaded media is stored outside the Flutter static site and is not exposed as a public media URL. Production should use authenticated or signed object storage, HTTPS, and a managed database.
 - The API token is stored in Flutter's secure storage plugin. Use HTTPS for any non-local deployment.
-- There is no custom model training, video editing, social API publishing, or recommendation system in this scope.
+- There is no custom model training, video editing, social API publishing, or recommendation system in this scope. Social publishing needs platform-specific OAuth credentials, approved permissions, account eligibility, and appropriate public media hosting; local source uploads are private and generated outputs are text drafts.

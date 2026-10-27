@@ -64,10 +64,21 @@ class _CreateContentPageState extends State<CreateContentPage> {
             : const ['mp4', 'mov', 'mkv', 'webm'],
         withData: true,
       );
+      if (!mounted) return;
       if (result == null || result.files.isEmpty) return;
       final file = result.files.first;
       if (file.size > 20 * 1024 * 1024) {
-        setState(() => _error = 'Choose a file smaller than 20 MB.');
+        setState(() {
+          _pickedFile = null;
+          _fileBytes = null;
+          _error = 'Choose a file smaller than 20 MB.';
+        });
+        return;
+      }
+      if (file.bytes == null) {
+        setState(
+          () => _error = 'We could not read that file. Please choose it again.',
+        );
         return;
       }
       setState(() {
@@ -75,9 +86,11 @@ class _CreateContentPageState extends State<CreateContentPage> {
         _fileBytes = file.bytes;
       });
     } catch (_) {
-      setState(
-        () => _error = 'The file picker could not open. Please try again.',
-      );
+      if (mounted) {
+        setState(
+          () => _error = 'The file picker could not open. Please try again.',
+        );
+      }
     }
   }
 
@@ -96,8 +109,12 @@ class _CreateContentPageState extends State<CreateContentPage> {
     });
     try {
       final api = context.read<AuthController>().api;
+      final sourceFirstLine = _sourceText.text
+          .split('\n')
+          .map((line) => line.trim())
+          .firstWhere((line) => line.isNotEmpty, orElse: () => 'New source');
       final title = _title.text.trim().isEmpty
-          ? (_pickedFile?.name ?? _sourceText.text.trim().split('\n').first)
+          ? (_pickedFile?.name ?? sourceFirstLine)
           : _title.text.trim();
       final dynamic created;
       if (_kind == 'text') {
@@ -117,27 +134,31 @@ class _CreateContentPageState extends State<CreateContentPage> {
           bytes: _fileBytes!,
         );
       }
+      if (!mounted) return;
       _sourceId = (created as Map)['id'] as int;
       final processed = Map<String, dynamic>.from(
         await api.post('sources/$_sourceId/process/'),
       );
+      if (!mounted) return;
       final transcript = processed['transcript'];
-      _transcript.text = transcript is Map
-          ? transcript['text'] as String? ?? ''
-          : '';
+      _transcript.text =
+          transcript is Map ? transcript['text'] as String? ?? '' : '';
       _analysis = processed['analysis'] is Map
           ? Map<String, dynamic>.from(processed['analysis'] as Map)
           : null;
-      if (_transcript.text.isEmpty && _kind == 'text')
+      if (_transcript.text.isEmpty && _kind == 'text') {
         _transcript.text = _sourceText.text.trim();
+      }
       setState(() => _step = 1);
     } on ApiException catch (error) {
-      setState(() => _error = error.message);
+      if (mounted) setState(() => _error = error.message);
     } catch (_) {
-      setState(
-        () => _error =
-            'We could not process this source. Check the file and API connection.',
-      );
+      if (mounted) {
+        setState(
+          () => _error =
+              'We could not process this source. Check the file and API connection.',
+        );
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -157,9 +178,10 @@ class _CreateContentPageState extends State<CreateContentPage> {
         'sources/$_sourceId/transcript/',
         {'text': _transcript.text.trim()},
       );
+      if (!mounted) return;
       setState(() => _step = 2);
     } on ApiException catch (error) {
-      setState(() => _error = error.message);
+      if (mounted) setState(() => _error = error.message);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -190,11 +212,13 @@ class _CreateContentPageState extends State<CreateContentPage> {
       );
       widget.onGenerated();
     } on ApiException catch (error) {
-      setState(() => _error = error.message);
+      if (mounted) setState(() => _error = error.message);
     } catch (_) {
-      setState(
-        () => _error = 'Content could not be generated. Please try again.',
-      );
+      if (mounted) {
+        setState(
+          () => _error = 'Content could not be generated. Please try again.',
+        );
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -202,324 +226,378 @@ class _CreateContentPageState extends State<CreateContentPage> {
 
   @override
   Widget build(BuildContext context) => ListView(
-    padding: const EdgeInsets.fromLTRB(28, 26, 28, 36),
-    children: [
-      const SectionHeading(
-        title: 'Create content',
-        subtitle:
-            'Start with one source. Shape it into content that fits each platform.',
-      ),
-      const SizedBox(height: 24),
-      _StepHeader(step: _step),
-      const SizedBox(height: 20),
-      if (_error != null) ...[
-        InlineError(message: _error!),
-        const SizedBox(height: 16),
-      ],
-      if (_step == 0) _sourceStep(),
-      if (_step == 1) _transcriptStep(),
-      if (_step == 2) _platformStep(),
-    ],
-  );
+        padding: const EdgeInsets.fromLTRB(28, 26, 28, 36),
+        children: [
+          const SectionHeading(
+            title: 'Create content',
+            subtitle:
+                'Start with one source. Shape it into content that fits each platform.',
+          ),
+          const SizedBox(height: 24),
+          _StepHeader(step: _step),
+          const SizedBox(height: 20),
+          if (_busy) ...[
+            const LinearProgressIndicator(),
+            const SizedBox(height: 8),
+            Text(
+              _step == 0
+                  ? (_kind == 'text'
+                      ? 'Analyzing your source…'
+                      : 'Uploading and transcribing…')
+                  : _step == 1
+                      ? 'Saving your transcript…'
+                      : 'Creating your drafts…',
+              style: const TextStyle(color: AppColors.muted, fontSize: 12),
+            ),
+            const SizedBox(height: 12),
+          ],
+          if (_error != null) ...[
+            InlineError(message: _error!),
+            const SizedBox(height: 16),
+          ],
+          AbsorbPointer(
+            absorbing: _busy,
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 220),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              child: KeyedSubtree(
+                key: ValueKey(_step),
+                child: switch (_step) {
+                  0 => _sourceStep(),
+                  1 => _transcriptStep(),
+                  _ => _platformStep(),
+                },
+              ),
+            ),
+          ),
+        ],
+      );
 
   Widget _sourceStep() => SurfaceCard(
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Choose a source', style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: 5),
-        const Text('Paste a transcript or upload a short audio or video file.'),
-        const SizedBox(height: 18),
-        Wrap(
-          spacing: 8,
-          children: [
-            _ModeChip(
-              label: 'Text',
-              icon: Icons.notes_rounded,
-              selected: _kind == 'text',
-              onTap: () => setState(() {
-                _kind = 'text';
-                _pickedFile = null;
-                _fileBytes = null;
-              }),
-            ),
-            _ModeChip(
-              label: 'Audio',
-              icon: Icons.graphic_eq_rounded,
-              selected: _kind == 'audio',
-              onTap: () => setState(() {
-                _kind = 'audio';
-                _pickedFile = null;
-                _fileBytes = null;
-              }),
-            ),
-            _ModeChip(
-              label: 'Video',
-              icon: Icons.videocam_outlined,
-              selected: _kind == 'video',
-              onTap: () => setState(() {
-                _kind = 'video';
-                _pickedFile = null;
-                _fileBytes = null;
-              }),
-            ),
-          ],
-        ),
-        const SizedBox(height: 18),
-        TextField(
-          controller: _title,
-          decoration: const InputDecoration(
-            labelText: 'Source title (optional)',
-            hintText: 'e.g. Episode 04 — Building habits',
-          ),
-        ),
-        const SizedBox(height: 14),
-        if (_kind == 'text')
-          TextField(
-            controller: _sourceText,
-            minLines: 9,
-            maxLines: 16,
-            maxLength: 30000,
-            decoration: const InputDecoration(
-              labelText: 'Your source text',
-              alignLabelWithHint: true,
-              hintText:
-                  'Paste a transcript, article, talk notes, or a few paragraphs…',
-            ),
-          )
-        else
-          _UploadDropzone(file: _pickedFile, kind: _kind, onPick: _pickFile),
-        const SizedBox(height: 4),
-        Wrap(
-          alignment: WrapAlignment.end,
-          children: [
-            const Padding(
-              padding: EdgeInsets.only(right: 14, top: 15),
-              child: Text(
-                'Files up to 20 MB',
-                style: TextStyle(color: AppColors.muted, fontSize: 11),
-              ),
-            ),
-            PrimaryAction(
-              label: _kind == 'text' ? 'Analyze source' : 'Upload & transcribe',
-              onPressed: _createAndProcess,
-              busy: _busy,
-              icon: Icons.arrow_forward_rounded,
-            ),
-          ],
-        ),
-      ],
-    ),
-  );
-
-  Widget _transcriptStep() => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      if (_analysis != null) ...[
-        SurfaceCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  const Icon(
-                    Icons.auto_awesome_rounded,
-                    color: AppColors.violet,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Source analysis',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Text(
-                _analysis!['topic'] as String? ?? 'Main topic',
-                style: const TextStyle(
-                  color: AppColors.violet,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(_analysis!['summary'] as String? ?? ''),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final point
-                      in (_analysis!['key_points'] as List? ?? const []).take(
-                        5,
-                      ))
-                    Chip(
-                      avatar: const Icon(
-                        Icons.check_rounded,
-                        size: 14,
-                        color: AppColors.mint,
-                      ),
-                      label: Text(point.toString()),
-                      visualDensity: VisualDensity.compact,
-                      backgroundColor: AppColors.mintSoft,
-                      side: BorderSide.none,
-                    ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-      ],
-      SurfaceCard(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Review the transcript',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
+            Text('Choose a source',
+                style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 5),
             const Text(
-              'Correct names or wording before creating your platform versions.',
+                'Paste a transcript or upload a short audio or video file.'),
+            const SizedBox(height: 18),
+            Wrap(
+              spacing: 8,
+              children: [
+                _ModeChip(
+                  label: 'Text',
+                  icon: Icons.notes_rounded,
+                  selected: _kind == 'text',
+                  onTap: () => setState(() {
+                    _kind = 'text';
+                    _pickedFile = null;
+                    _fileBytes = null;
+                    _error = null;
+                  }),
+                ),
+                _ModeChip(
+                  label: 'Audio',
+                  icon: Icons.graphic_eq_rounded,
+                  selected: _kind == 'audio',
+                  onTap: () => setState(() {
+                    _kind = 'audio';
+                    _pickedFile = null;
+                    _fileBytes = null;
+                    _error = null;
+                  }),
+                ),
+                _ModeChip(
+                  label: 'Video',
+                  icon: Icons.videocam_outlined,
+                  selected: _kind == 'video',
+                  onTap: () => setState(() {
+                    _kind = 'video';
+                    _pickedFile = null;
+                    _fileBytes = null;
+                    _error = null;
+                  }),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            TextField(
+              controller: _title,
+              decoration: const InputDecoration(
+                labelText: 'Source title (optional)',
+                hintText: 'e.g. Episode 04 — Building habits',
+              ),
             ),
             const SizedBox(height: 14),
-            TextField(
-              controller: _transcript,
-              minLines: 8,
-              maxLines: 15,
-              maxLength: 30000,
-              decoration: const InputDecoration(
-                alignLabelWithHint: true,
-                hintText: 'Your source text appears here…',
+            if (_kind == 'text')
+              TextField(
+                controller: _sourceText,
+                minLines: 9,
+                maxLines: 16,
+                maxLength: 30000,
+                decoration: const InputDecoration(
+                  labelText: 'Your source text',
+                  alignLabelWithHint: true,
+                  hintText:
+                      'Paste a transcript, article, talk notes, or a few paragraphs…',
+                ),
+              )
+            else
+              _UploadDropzone(
+                  file: _pickedFile, kind: _kind, onPick: _pickFile),
+            if (_kind != 'text' && _pickedFile != null)
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: () => setState(() {
+                    _pickedFile = null;
+                    _fileBytes = null;
+                    _error = null;
+                  }),
+                  icon: const Icon(Icons.close_rounded, size: 16),
+                  label: const Text('Remove file'),
+                ),
+              ),
+            const SizedBox(height: 4),
+            Wrap(
+              alignment: WrapAlignment.end,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.only(right: 14, top: 15),
+                  child: Text(
+                    'Files up to 20 MB',
+                    style: TextStyle(color: AppColors.muted, fontSize: 11),
+                  ),
+                ),
+                PrimaryAction(
+                  label: _busy
+                      ? (_kind == 'text' ? 'Analyzing…' : 'Transcribing…')
+                      : _kind == 'text'
+                          ? 'Analyze source'
+                          : 'Upload & transcribe',
+                  onPressed: _createAndProcess,
+                  busy: _busy,
+                  icon: Icons.arrow_forward_rounded,
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+
+  Widget _transcriptStep() => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (_analysis != null) ...[
+            SurfaceCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.auto_awesome_rounded,
+                        color: AppColors.violet,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Source analysis',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    _analysis!['topic'] as String? ?? 'Main topic',
+                    style: const TextStyle(
+                      color: AppColors.violet,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(_analysis!['summary'] as String? ?? ''),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final point
+                          in (_analysis!['key_points'] as List? ?? const [])
+                              .take(
+                        5,
+                      ))
+                        Chip(
+                          avatar: const Icon(
+                            Icons.check_rounded,
+                            size: 14,
+                            color: AppColors.mint,
+                          ),
+                          label: Text(point.toString()),
+                          visualDensity: VisualDensity.compact,
+                          backgroundColor: AppColors.mintSoft,
+                          side: BorderSide.none,
+                        ),
+                    ],
+                  ),
+                ],
               ),
             ),
-            Row(
+            const SizedBox(height: 16),
+          ],
+          SurfaceCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                TextButton.icon(
-                  onPressed: () => setState(() => _step = 0),
-                  icon: const Icon(Icons.arrow_back_rounded),
-                  label: const Text('Back'),
+                Text(
+                  'Review the transcript',
+                  style: Theme.of(context).textTheme.titleLarge,
                 ),
-                const Spacer(),
-                PrimaryAction(
-                  label: 'Choose platforms',
-                  icon: Icons.arrow_forward_rounded,
-                  onPressed: _saveTranscript,
-                  busy: _busy,
+                const SizedBox(height: 5),
+                const Text(
+                  'Correct names or wording before creating your platform versions.',
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: _transcript,
+                  minLines: 8,
+                  maxLines: 15,
+                  maxLength: 30000,
+                  decoration: const InputDecoration(
+                    alignLabelWithHint: true,
+                    hintText: 'Your source text appears here…',
+                  ),
+                ),
+                Row(
+                  children: [
+                    TextButton.icon(
+                      onPressed: () => setState(() => _step = 0),
+                      icon: const Icon(Icons.arrow_back_rounded),
+                      label: const Text('Back'),
+                    ),
+                    const Spacer(),
+                    PrimaryAction(
+                      label: 'Choose platforms',
+                      icon: Icons.arrow_forward_rounded,
+                      onPressed: _saveTranscript,
+                      busy: _busy,
+                    ),
+                  ],
                 ),
               ],
             ),
-          ],
-        ),
-      ),
-    ],
-  );
+          ),
+        ],
+      );
 
   Widget _platformStep() => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      SurfaceCard(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Where will it go?',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 5),
-            const Text(
-              'Each platform gets its own tone and length. Select one or more.',
-            ),
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SurfaceCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                for (final entry in _platformOptions.entries)
-                  FilterChip(
-                    selected: _platforms.contains(entry.key),
-                    onSelected: (value) => setState(() {
-                      value
-                          ? _platforms.add(entry.key)
-                          : _platforms.remove(entry.key);
-                    }),
-                    avatar: Icon(
-                      entry.value.$2,
-                      size: 17,
-                      color: _platforms.contains(entry.key)
-                          ? AppColors.violet
-                          : AppColors.muted,
-                    ),
-                    label: Text(entry.value.$1),
-                    showCheckmark: true,
-                    selectedColor: AppColors.violetSoft,
-                    side: BorderSide(
-                      color: _platforms.contains(entry.key)
-                          ? AppColors.violet
-                          : AppColors.border,
-                    ),
-                  ),
-              ],
-            ),
-          ],
-        ),
-      ),
-      const SizedBox(height: 16),
-      SurfaceCard(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'What should we create?',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 5),
-            const Text(
-              'Pick the formats you need. You can edit every draft afterward.',
-            ),
-            const SizedBox(height: 15),
-            Wrap(
-              spacing: 9,
-              runSpacing: 2,
-              children: [
-                for (final entry in _typeOptions.entries)
-                  FilterChip(
-                    selected: _types.contains(entry.key),
-                    onSelected: (value) => setState(() {
-                      value ? _types.add(entry.key) : _types.remove(entry.key);
-                    }),
-                    label: Text(entry.value),
-                    selectedColor: AppColors.violetSoft,
-                    side: BorderSide(
-                      color: _types.contains(entry.key)
-                          ? AppColors.violet
-                          : AppColors.border,
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                TextButton.icon(
-                  onPressed: () => setState(() => _step = 1),
-                  icon: const Icon(Icons.arrow_back_rounded),
-                  label: const Text('Back'),
+                Text(
+                  'Where will it go?',
+                  style: Theme.of(context).textTheme.titleLarge,
                 ),
-                const Spacer(),
-                PrimaryAction(
-                  label: 'Generate drafts',
-                  icon: Icons.auto_awesome_rounded,
-                  onPressed: _generate,
-                  busy: _busy,
+                const SizedBox(height: 5),
+                const Text(
+                  'Each platform gets its own tone and length. Select one or more.',
+                ),
+                const SizedBox(height: 16),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    for (final entry in _platformOptions.entries)
+                      FilterChip(
+                        selected: _platforms.contains(entry.key),
+                        onSelected: (value) => setState(() {
+                          value
+                              ? _platforms.add(entry.key)
+                              : _platforms.remove(entry.key);
+                        }),
+                        avatar: Icon(
+                          entry.value.$2,
+                          size: 17,
+                          color: _platforms.contains(entry.key)
+                              ? AppColors.violet
+                              : AppColors.muted,
+                        ),
+                        label: Text(entry.value.$1),
+                        showCheckmark: true,
+                        selectedColor: AppColors.violetSoft,
+                        side: BorderSide(
+                          color: _platforms.contains(entry.key)
+                              ? AppColors.violet
+                              : AppColors.border,
+                        ),
+                      ),
+                  ],
                 ),
               ],
             ),
-          ],
-        ),
-      ),
-    ],
-  );
+          ),
+          const SizedBox(height: 16),
+          SurfaceCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'What should we create?',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 5),
+                const Text(
+                  'Pick the formats you need. You can edit every draft afterward.',
+                ),
+                const SizedBox(height: 15),
+                Wrap(
+                  spacing: 9,
+                  runSpacing: 2,
+                  children: [
+                    for (final entry in _typeOptions.entries)
+                      FilterChip(
+                        selected: _types.contains(entry.key),
+                        onSelected: (value) => setState(() {
+                          value
+                              ? _types.add(entry.key)
+                              : _types.remove(entry.key);
+                        }),
+                        label: Text(entry.value),
+                        selectedColor: AppColors.violetSoft,
+                        side: BorderSide(
+                          color: _types.contains(entry.key)
+                              ? AppColors.violet
+                              : AppColors.border,
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    TextButton.icon(
+                      onPressed: () => setState(() => _step = 1),
+                      icon: const Icon(Icons.arrow_back_rounded),
+                      label: const Text('Back'),
+                    ),
+                    const Spacer(),
+                    PrimaryAction(
+                      label: 'Generate drafts',
+                      icon: Icons.auto_awesome_rounded,
+                      onPressed: _generate,
+                      busy: _busy,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
 }
 
 class _StepHeader extends StatelessWidget {
@@ -546,7 +624,7 @@ class _StepHeader extends StatelessWidget {
               borderRadius: BorderRadius.circular(99),
               border: Border.all(
                 color: i <= step
-                    ? AppColors.violet.withOpacity(.22)
+                    ? AppColors.violet.withValues(alpha: .22)
                     : AppColors.border,
               ),
             ),
@@ -605,13 +683,13 @@ class _ModeChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ChoiceChip(
-    label: Text(label),
-    avatar: Icon(icon, size: 17),
-    selected: selected,
-    onSelected: (_) => onTap(),
-    selectedColor: AppColors.violetSoft,
-    side: BorderSide(color: selected ? AppColors.violet : AppColors.border),
-  );
+        label: Text(label),
+        avatar: Icon(icon, size: 17),
+        selected: selected,
+        onSelected: (_) => onTap(),
+        selectedColor: AppColors.violetSoft,
+        side: BorderSide(color: selected ? AppColors.violet : AppColors.border),
+      );
 }
 
 class _UploadDropzone extends StatelessWidget {
@@ -626,45 +704,46 @@ class _UploadDropzone extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => InkWell(
-    onTap: onPick,
-    borderRadius: BorderRadius.circular(14),
-    child: Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 30, horizontal: 20),
-      decoration: BoxDecoration(
-        color: AppColors.canvas,
+        onTap: onPick,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border, style: BorderStyle.solid),
-      ),
-      child: Column(
-        children: [
-          Icon(
-            file == null
-                ? (kind == 'audio'
-                      ? Icons.graphic_eq_rounded
-                      : Icons.video_library_outlined)
-                : Icons.check_circle_outline_rounded,
-            size: 32,
-            color: AppColors.violet,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 30, horizontal: 20),
+          decoration: BoxDecoration(
+            color: AppColors.canvas,
+            borderRadius: BorderRadius.circular(14),
+            border:
+                Border.all(color: AppColors.border, style: BorderStyle.solid),
           ),
-          const SizedBox(height: 10),
-          Text(
-            file?.name ?? 'Choose ${kind} file',
-            style: const TextStyle(
-              color: AppColors.ink,
-              fontWeight: FontWeight.w600,
-            ),
+          child: Column(
+            children: [
+              Icon(
+                file == null
+                    ? (kind == 'audio'
+                        ? Icons.graphic_eq_rounded
+                        : Icons.video_library_outlined)
+                    : Icons.check_circle_outline_rounded,
+                size: 32,
+                color: AppColors.violet,
+              ),
+              const SizedBox(height: 10),
+              Text(
+                file?.name ?? 'Choose $kind file',
+                style: const TextStyle(
+                  color: AppColors.ink,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                file == null
+                    ? 'MP3, WAV, M4A, MP4, MOV or WEBM · up to 20 MB'
+                    : '${(file!.size / 1024 / 1024).toStringAsFixed(1)} MB · tap to change',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 11),
+              ),
+            ],
           ),
-          const SizedBox(height: 4),
-          Text(
-            file == null
-                ? 'MP3, WAV, M4A, MP4, MOV or WEBM · up to 20 MB'
-                : '${(file!.size / 1024 / 1024).toStringAsFixed(1)} MB · tap to change',
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 11),
-          ),
-        ],
-      ),
-    ),
-  );
+        ),
+      );
 }

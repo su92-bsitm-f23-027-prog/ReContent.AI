@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../core/app_theme.dart';
 import '../../core/auth_controller.dart';
@@ -58,6 +59,44 @@ class _AuthPageState extends State<AuthPage> {
           () => _error =
               'Could not connect. Check the API address and try again.',
         );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _signInWithGoogle() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await context.read<AuthController>().signInWithGoogle();
+    } on ApiException catch (error) {
+      if (mounted) {
+        final status =
+            error.statusCode == null ? '' : ' (HTTP ${error.statusCode})';
+        setState(
+            () => _error = 'Server sign-in failed$status: ${error.message}');
+      }
+    } on FirebaseAuthException catch (error) {
+      final code = error.code.toLowerCase();
+      final message = code.contains('api-key-not-valid') ||
+              code.contains('invalid-api-key')
+          ? 'Firebase rejected the web API key. Use the exact apiKey from Project settings → General → your Web app, then restart Flutter.'
+          : switch (error.code) {
+              'popup-closed-by-user' => 'Google sign-in was cancelled.',
+              'operation-not-allowed' =>
+                'Enable Google as a sign-in provider in Firebase Authentication.',
+              'unauthorized-domain' =>
+                'Add this app address to Firebase Authentication’s authorized domains.',
+              _ =>
+                'Google sign-in failed (${error.code}): ${error.message ?? 'No details returned.'}',
+            };
+      if (mounted) setState(() => _error = message);
+    } catch (error) {
+      if (mounted) {
+        setState(() => _error = 'Google sign-in failed: $error');
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -199,15 +238,46 @@ class _AuthPageState extends State<AuthPage> {
                     : Text(_isRegistering ? 'Create account' : 'Sign in'),
               ),
             ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                const Expanded(child: Divider()),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Text(
+                    'OR',
+                    style: Theme.of(context).textTheme.labelSmall,
+                  ),
+                ),
+                const Expanded(child: Divider()),
+              ],
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: OutlinedButton.icon(
+                onPressed: _busy ? null : _signInWithGoogle,
+                icon: const Text(
+                  'G',
+                  style: TextStyle(
+                    color: Color(0xFF4285F4),
+                    fontSize: 19,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                label: const Text('Continue with Google'),
+              ),
+            ),
             const SizedBox(height: 20),
             Center(
               child: TextButton(
                 onPressed: _busy
                     ? null
                     : () => setState(() {
-                        _isRegistering = !_isRegistering;
-                        _error = null;
-                      }),
+                          _isRegistering = !_isRegistering;
+                          _error = null;
+                        }),
                 child: Text(
                   _isRegistering
                       ? 'Already have an account? Sign in'
@@ -328,20 +398,20 @@ class _WorkflowItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Column(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      Icon(icon, color: Colors.white, size: 20),
-      const SizedBox(height: 7),
-      Text(
-        label,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    ],
-  );
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: Colors.white, size: 20),
+          const SizedBox(height: 7),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      );
 }
 
 class _BrandMark extends StatelessWidget {
@@ -350,43 +420,42 @@ class _BrandMark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Row(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      Container(
-        width: 36,
-        height: 36,
-        decoration: BoxDecoration(
-          color: light
-              ? Colors.white.withOpacity(.15)
-              : AppColors.violetSoft,
-          borderRadius: BorderRadius.circular(11),
-        ),
-        child: Icon(
-          Icons.auto_awesome_rounded,
-          color: light ? Colors.white : AppColors.violet,
-          size: 19,
-        ),
-      ),
-      const SizedBox(width: 10),
-      Text(
-        'ReContent',
-        style: TextStyle(
-          fontSize: 18,
-          fontWeight: FontWeight.w700,
-          color: light ? Colors.white : AppColors.ink,
-        ),
-      ),
-      const SizedBox(width: 4),
-      Text(
-        'AI',
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-          color: light ? Colors.white70 : AppColors.violet,
-        ),
-      ),
-    ],
-  );
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color:
+                  light ? Colors.white.withOpacity(.15) : AppColors.violetSoft,
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: Icon(
+              Icons.auto_awesome_rounded,
+              color: light ? Colors.white : AppColors.violet,
+              size: 19,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            'ReContent',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: light ? Colors.white : AppColors.ink,
+            ),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            'AI',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: light ? Colors.white70 : AppColors.violet,
+            ),
+          ),
+        ],
+      );
 }
 
 class _ErrorBanner extends StatelessWidget {
@@ -395,15 +464,15 @@ class _ErrorBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    width: double.infinity,
-    padding: const EdgeInsets.all(12),
-    decoration: BoxDecoration(
-      color: const Color(0xFFFFF0F1),
-      borderRadius: BorderRadius.circular(10),
-    ),
-    child: Text(
-      message,
-      style: const TextStyle(color: Color(0xFF9E3544), fontSize: 13),
-    ),
-  );
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFF0F1),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Text(
+          message,
+          style: const TextStyle(color: Color(0xFF9E3544), fontSize: 13),
+        ),
+      );
 }

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/api_client.dart';
 import '../../core/app_theme.dart';
 import '../../core/auth_controller.dart';
 import '../../core/widgets.dart';
@@ -94,26 +93,29 @@ class _ContentLibraryPageState extends State<ContentLibraryPage> {
             FutureBuilder<List<Map<String, dynamic>>>(
               future: _items,
               builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting)
+                if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Padding(
                     padding: EdgeInsets.all(40),
                     child: Center(child: CircularProgressIndicator()),
                   );
-                if (snapshot.hasError)
+                }
+                if (snapshot.hasError) {
                   return InlineError(
                     message: snapshot.error.toString(),
                     onRetry: () => setState(() => _items = _load()),
                   );
+                }
                 final items = snapshot.data ?? const [];
-                if (items.isEmpty)
+                if (items.isEmpty) {
                   return EmptyState(
                     title: _filter == 'all'
                         ? 'Your content will appear here'
-                        : 'No ${_filter} content',
+                        : 'No $_filter content',
                     description: _filter == 'all'
                         ? 'Create platform-ready drafts from a source to start your library.'
                         : 'Try another status filter or create some new content.',
                   );
+                }
                 return Column(
                   children: [
                     for (final item in items)
